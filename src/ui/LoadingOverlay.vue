@@ -1,5 +1,5 @@
 <template>
-  <div class="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
     <div class="flex flex-col items-center gap-3">
       <svg
         class="h-8 w-8 animate-spin text-white"

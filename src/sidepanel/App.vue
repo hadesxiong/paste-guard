@@ -8,7 +8,7 @@ import { Button, LoadingOverlay } from '../ui'
 
 const store = useDetectionStore()
 const inputText = ref('')
-const isProcessing = computed(() => store.isProcessing)
+const showOverlay = ref(false)
 const hasResults = computed(() => store.detections.length > 0)
 const showEngineStatus = ref(false)
 
@@ -18,8 +18,12 @@ const showEngineStatus = ref(false)
 // })
 
 const handleDetect = async (text: string) => {
+    showOverlay.value = true
+    document.body.style.overflow = 'hidden'
     const minDelay = new Promise(resolve => setTimeout(resolve, 1000))
     await Promise.all([store.detect(text), minDelay])
+    showOverlay.value = false
+    document.body.style.overflow = ''
 }
 
 const handleCopy = async () => {
@@ -281,7 +285,7 @@ const engineStatusItems = computed(() => [
         <main class="p-3 flex flex-col gap-3 max-w-2xl mx-auto relative">
         <InputArea
             v-model="inputText"
-            :is-processing="isProcessing"
+            :is-processing="showOverlay"
             @detect="handleDetect"
             @clear="handleClear"
         />
@@ -290,7 +294,7 @@ const engineStatusItems = computed(() => [
             v-if="hasResults"
             :detections="store.detections"
         />
-        <LoadingOverlay v-if="isProcessing" class="absolute z-20" />
+        <LoadingOverlay v-if="showOverlay" />
         </main>
     </div>
     <div class="fixed bottom-0 h-auto w-full">
