@@ -80,9 +80,6 @@ export class MappingManager {
       } else if (config.action === 'keep') {
         // 保留原文，不添加到映射表
         continue
-      } else if (config.action === 'whitelist') {
-        // 加入白名单（TODO: 实现白名单功能）
-        continue
       }
     }
 

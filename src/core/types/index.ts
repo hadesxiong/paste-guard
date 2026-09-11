@@ -30,7 +30,7 @@ export interface DetectionResult {
 }
 
 // 替换操作
-export type ReplaceAction = 'replace' | 'keep' | 'whitelist'
+export type ReplaceAction = 'replace' | 'keep'
 
 // 替换配置
 export interface ReplaceConfig {

@@ -17,7 +17,7 @@ export function useDetector() {
 
   const setReplaceAction = (
     itemId: string,
-    action: 'replace' | 'keep' | 'whitelist'
+    action: 'replace' | 'keep'
   ) => {
     store.setReplaceAction(itemId, action)
   }

@@ -13,32 +13,68 @@ export class TransformersNERDetector implements NERDetector {
   private pipeline: any = null
   private ready = false
   private loadProgress = 0
+  private loading = false
 
   async load(): Promise<void> {
+    if (this.loading || this.ready) {
+      console.log('[PasteGuard] NER model already loading or loaded')
+      return
+    }
+
+    this.loading = true
+    console.log('[PasteGuard] Loading NER model...')
+
     try {
-      // 动态导入transformers.js
-      const { pipeline } = await import('@xenova/transformers')
+      // 动态导入transformers.js和onnxruntime-web
+      const transformers = await import('@xenova/transformers')
+      const ort = await import('onnxruntime-web')
+
+      // 配置环境
+      const { env } = transformers
+      env.allowLocalModels = false
+      env.useBrowserCache = true
+
+      // 配置 onnxruntime-web：禁用多线程和代理，避免 Chrome 扩展 CSP 问题
+      ort.env.wasm.numThreads = 1
+      ort.env.wasm.proxy = false
+
+      // 设置国内镜像地址
+      env.remoteHost = 'https://hf-mirror.com'
+      env.remotePathTemplate = '{model}/resolve/main/'
+
+      // 禁用多线程，避免 Chrome 扩展 CSP 阻止 blob URL worker
+      env.backends.onnx.wasm.numThreads = 1
+
+      console.log('[PasteGuard] Using mirror host:', env.remoteHost)
+      console.log('[PasteGuard] ONNX numThreads:', env.backends.onnx.wasm.numThreads)
+      console.log('[PasteGuard] ONNX proxy:', ort.env.wasm.proxy)
 
       // 加载量化后的BERT-NER模型
-      this.pipeline = await pipeline('ner', 'Xenova/bert-base-NER', {
+      this.pipeline = await transformers.pipeline('ner', 'Xenova/bert-base-NER', {
         quantized: true,
         progress_callback: (progress: any) => {
           if (progress.status === 'progress') {
             this.loadProgress = progress.progress || 0
+            console.log(`[PasteGuard] NER model loading progress: ${this.loadProgress}%`)
+          } else if (progress.status === 'done') {
+            console.log('[PasteGuard] NER model download completed')
           }
         }
       })
 
       this.ready = true
-      console.log('NER model loaded successfully')
+      this.loading = false
+      console.log('[PasteGuard] NER model loaded successfully')
     } catch (error) {
-      console.error('Failed to load NER model:', error)
+      this.loading = false
+      console.error('[PasteGuard] Failed to load NER model:', error)
       throw error
     }
   }
 
   async detect(text: string): Promise<NERResult[]> {
     if (!this.ready || !this.pipeline) {
+      console.warn('[PasteGuard] NER detector not ready')
       return []
     }
 
@@ -46,6 +82,8 @@ export class TransformersNERDetector implements NERDetector {
       const results = await this.pipeline(text, {
         aggregation_strategy: 'simple'
       })
+
+      console.log('[PasteGuard] NER detection results:', results.length, 'entities')
 
       return results.map((result: any) => ({
         entity_group: result.entity_group,
@@ -55,7 +93,7 @@ export class TransformersNERDetector implements NERDetector {
         score: result.score
       }))
     } catch (error) {
-      console.error('NER detection failed:', error)
+      console.error('[PasteGuard] NER detection failed:', error)
       return []
     }
   }
