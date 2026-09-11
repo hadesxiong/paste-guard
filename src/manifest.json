@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "PasteGuard - AI脱敏助手",
+  "version": "1.0.0",
+  "description": "AI对话前的本地数据脱敏浏览器插件，保护您的敏感信息",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "clipboardWrite"
+  ],
+  "action": {
+    "default_popup": "src/popup/index.html"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
+  },
+  "background": {
+    "service_worker": "src/background/service-worker.ts",
+    "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}
