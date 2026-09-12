@@ -283,18 +283,17 @@ const engineStatusItems = computed(() => [
 
         <!-- 主内容 -->
         <main class="p-3 flex flex-col gap-3 max-w-2xl mx-auto relative">
-        <InputArea
-            v-model="inputText"
-            :is-processing="showOverlay"
-            @detect="handleDetect"
-            @clear="handleClear"
-        />
+            <InputArea
+                v-model="inputText"
+                :is-processing="showOverlay"
+                @detect="handleDetect"
+                @clear="handleClear"
+            />
 
-        <DetectionList
-            v-if="hasResults"
-            :detections="store.detections"
-        />
-        <LoadingOverlay v-if="showOverlay" />
+            <DetectionList v-if="hasResults"
+                :detections="store.detections" class="mb-14"
+            />
+            <LoadingOverlay v-if="showOverlay" />
         </main>
     </div>
     <div class="fixed bottom-0 h-auto w-full">

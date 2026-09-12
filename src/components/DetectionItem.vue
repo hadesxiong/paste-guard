@@ -70,10 +70,10 @@ const truncate = (str: string, maxLength: number = 30): string => {
                 </div>
                 <!-- 切换: 保留/替换 -->
                 <div class="flex items-center gap-2 shrink-0 pt-1">
-                    <Switch v-model="isReplace" />
                     <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
                         {{ isReplace ? '替换' : '保留' }}
                     </span>
+                    <Switch v-model="isReplace" />
                 </div>
             </div>
             <!-- 原文 -->
