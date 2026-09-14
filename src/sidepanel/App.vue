@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useDetectionStore } from '../stores/detection'
 import InputArea from '../components/InputArea.vue'
 import DetectionList from '../components/DetectionList.vue'
@@ -16,6 +16,38 @@ const showEngineStatus = ref(false)
 // onMounted(() => {
 //     store.initNER()
 // })
+
+// WebDevtools 状态测试
+;(window as any).__store = store
+
+const dismissTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+const dismissing = ref(false)
+
+const onNotifyLeave = () => {
+    if (dismissing.value) {
+        dismissing.value = false
+        store.nerStatus = 'idle'
+    }
+}
+
+
+watch(() => store.nerStatus, (status) => {
+    dismissing.value = false
+    if (dismissTimer.value) {
+        clearTimeout(dismissTimer.value)
+        dismissTimer.value = null
+    }
+    if (status === 'success' || status === 'error' || status === 'timeout') {
+            dismissTimer.value = setTimeout(() => {
+            store.nerStatus = 'idle'
+            dismissing.value = true
+        }, 2000)
+    }
+})
+
+onUnmounted(() => {
+    if (dismissTimer.value) clearTimeout(dismissTimer.value)
+})
 
 const handleDetect = async (text: string) => {
     showOverlay.value = true
@@ -187,71 +219,78 @@ const engineStatusItems = computed(() => [
             </div>
         </div>
         <!-- NER 模型状态条 -->
-        <div
-        v-if="store.nerStatus === 'loading'"
-        class="mx-4 mt-4 flex items-center gap-3 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800"
-        >
-        <svg
-            class="w-5 h-5 text-blue-500 animate-spin"
-            fill="none"
-            viewBox="0 0 24 24"
-        >
-            <circle
-            class="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            stroke-width="4"
-            />
-            <path
-            class="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-        </svg>
-        <div class="flex-1">
-            <p class="text-sm font-medium text-blue-700 dark:text-blue-300">
-            正在加载NER模型...
-            </p>
-            <p class="text-xs text-blue-500 dark:text-blue-400">
-            首次使用需要下载模型，请稍候
-            </p>
-        </div>
-        </div>
+        <Transition name="ner-notify" @after-leave="onNotifyLeave">
+            <div v-if="store.nerStatus === 'loading' && !dismissing"
+                class="fixed z-20 left-1/2 -translate-x-1/2 m-3 p-3 gap-3 flex items-center max-w-125 min-w-80 w-auto
+                    bg-blue-50 dark:bg-blue-900/20 rounded-sm 
+                    border border-blue-200 dark:border-blue-800">
+                <svg class="w-5 h-5 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10"
+                        stroke="currentColor" stroke-width="4"/>
+                    <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                </svg>
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-blue-700 dark:text-blue-300">
+                    正在加载NER模型...
+                    </p>
+                    <p v-if="store.nerLoadProgress === 0" class="text-xs text-blue-500 dark:text-blue-400">
+                    首次使用需要下载模型，请稍候
+                    </p>
+                    <div v-else class="w-full mt-2">
+                        <div class="flex justify-between text-xs text-blue-500 mb-1">
+                            <span>下载中...</span>
+                            <span>{{ store.nerLoadProgress }}%</span>
+                        </div>
+                        <div class="w-full bg-blue-200 rounded-full h-1.5">
+                            <div class="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+                                :style="{ width: store.nerLoadProgress + '%' }"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Transition>
         <!-- NER 模型下载提示 - 失败 -->
-        <div v-else-if="store.nerStatus === 'error' || store.nerStatus === 'timeout'"
-            class="mx-4 mt-4 flex items-center gap-3 px-4 py-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800">
-            <svg class="w-5 h-5 text-yellow-500" fill="none"
-                stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-            </svg>
-            <div class="flex-1">
-                <p class="text-sm font-medium text-yellow-700 dark:text-yellow-300">
-                    {{ store.nerStatus === 'timeout' ? 'NER模型加载超时' : 'NER模型加载失败' }}</p>
-                <p class="text-xs text-yellow-500 dark:text-yellow-400">
-                    {{ store.nerError || '基础检测功能仍可正常使用' }}</p>
+        <Transition name="ner-notify" @after-leave="onNotifyLeave">
+            <div v-if="store.nerStatus === 'error' || store.nerStatus === 'timeout' && store.nerRetryCount >= 3 && !dismissing" 
+                class="fixed z-20 left-1/2 -translate-x-1/2 m-3 p-3 gap-3 flex items-center max-w-125 min-w-80 w-auto
+                    bg-yellow-50 dark:bg-yellow-900/20 rounded-sm 
+                    border border-yellow-200 dark:border-yellow-800">
+                <svg class="w-5 h-5 text-yellow-500" fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-yellow-700 dark:text-yellow-300">
+                        {{ store.nerStatus === 'timeout' ? 'NER模型加载超时' : 'NER模型加载失败' }}</p>
+                    <p class="text-xs text-yellow-500 dark:text-yellow-400">
+                        {{ store.nerError || '基础检测功能仍可正常使用' }}</p>
+                </div>
+                <Button @click="store.retryLoadNER"
+                    variant="secondary" btnType="outline" size="sm">
+                    重试</Button>
             </div>
-            <Button @click="store.retryLoadNER"
-                variant="secondary" btnType="outline" size="sm">
-                重试</Button>
-        </div>
+        </Transition>
         <!-- NER 模型下载提示 - 成功 -->
-        <div v-else-if="store.nerStatus === 'success'"
-            class="mx-4 mt-4 flex items-center gap-3 px-4 py-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
-            <svg class="w-5 h-5 text-green-500" fill="none"
-                stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                    stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            <div class="flex-1">
-                <p class="text-sm font-medium text-green-700 dark:text-green-300">
-                    NER模型已就绪</p>
-                <p class="text-xs text-green-500 dark:text-green-400">
-                    增强检测已启用</p>
+        <Transition name="ner-notify" @after-leave="onNotifyLeave">
+            <div v-if="store.nerStatus === 'success' && !dismissing"
+                class="fixed z-20 left-1/2 -translate-x-1/2 m-3 p-3 gap-3 flex items-center max-w-125 min-w-80 w-auto
+                    bg-green-50 dark:bg-green-900/20 rounded-sm 
+                    border border-green-200 dark:border-green-800">
+                <svg class="w-5 h-5 text-green-500" fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-green-700 dark:text-green-300">
+                        NER模型已就绪</p>
+                    <p class="text-xs text-green-500 dark:text-green-400">
+                        增强检测已启用</p>
+                </div>
             </div>
-        </div>
+        </Transition>
         <!-- 主内容 -->
         <main :class="[
             'flex flex-col relative',
@@ -307,5 +346,24 @@ const engineStatusItems = computed(() => [
             </div>
         </main>
     </div>
-
 </template>
+
+<style scoped>
+/* 进入：从上方滑入 + 淡入 */
+.ner-notify-enter-from {
+    opacity: 0;
+    transform: translateY(-8px);
+}
+.ner-notify-enter-active {
+    transition: all 0.3s ease-out;
+}
+
+/* 退出：向上滑出 + 淡出 */
+.ner-notify-leave-to {
+    opacity: 0;
+    transform: translateY(-8px);
+}
+.ner-notify-leave-active {
+    transition: all 0.3s ease-in;
+}
+</style>
