@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, onMounted } from 'vue'
 import { useDetectionStore } from '../stores/detection'
 import InputArea from '../components/InputArea.vue'
 import DetectionList from '../components/DetectionList.vue'
@@ -13,9 +13,9 @@ const hasResults = computed(() => store.detections.length > 0)
 const showEngineStatus = ref(false)
 
 // [NER-disabled] 网络环境较差时禁用，启用时取消注释
-// onMounted(() => {
-//     store.initNER()
-// })
+onMounted(() => {
+    store.initNER()
+})
 
 // WebDevtools 状态测试
 ;(window as any).__store = store

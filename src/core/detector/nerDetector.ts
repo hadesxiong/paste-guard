@@ -14,6 +14,7 @@ export class TransformersNERDetector implements NERDetector {
   private ready = false
   private loadProgress = 0
   private loading = false
+  private hasSeenRealProgress = false  // 是否见过真实进度（< 100%）
 
   async load(): Promise<void> {
     if (this.loading || this.ready) {
@@ -22,6 +23,8 @@ export class TransformersNERDetector implements NERDetector {
     }
 
     this.loading = true
+    this.loadProgress = 0
+    this.hasSeenRealProgress = false
     console.log('[PasteGuard] Loading NER model...')
 
     try {
@@ -39,7 +42,8 @@ export class TransformersNERDetector implements NERDetector {
       ort.env.wasm.proxy = false
 
       // 设置国内镜像地址
-      env.remoteHost = 'https://hf-mirror.com'
+    //   env.remoteHost = 'https://hf-mirror.com'
+      env.remoteHost = 'https://huggingface.co'
       env.remotePathTemplate = '{model}/resolve/main/'
 
       // 禁用多线程，避免 Chrome 扩展 CSP 阻止 blob URL worker
@@ -54,10 +58,21 @@ export class TransformersNERDetector implements NERDetector {
         quantized: true,
         progress_callback: (progress: any) => {
           if (progress.status === 'progress') {
-            this.loadProgress = progress.progress || 0
+            const rawProgress = progress.progress || 0
+            
+            // 如果第一次进度就是100%，可能是缓存命中，不视为真实进度
+            if (!this.hasSeenRealProgress && rawProgress >= 100) {
+              console.log('[PasteGuard] NER model cached, waiting for real download progress...')
+              return
+            }
+            
+            this.hasSeenRealProgress = true
+            // 保留小数点后两位
+            this.loadProgress = Math.round(rawProgress * 100) / 100
             console.log(`[PasteGuard] NER model loading progress: ${this.loadProgress}%`)
           } else if (progress.status === 'done') {
             console.log('[PasteGuard] NER model download completed')
+            this.loadProgress = 100
           }
         }
       })
@@ -83,11 +98,14 @@ export class TransformersNERDetector implements NERDetector {
         aggregation_strategy: 'simple'
       })
 
-      console.log('[PasteGuard] NER detection results:', results.length, 'entities')
+      const merged = this.mergeAdjacentEntities(results, text)
+      const deduped = this.removeRedundantEntities(merged)
 
-      return results.map((result: any) => ({
+      console.log('[PasteGuard] NER detection results:', deduped.length, 'entities (from', results.length, 'raw)')
+
+      return deduped.map((result: any) => ({
         entity_group: result.entity_group,
-        word: result.word,
+        word: text.substring(result.start, result.end),
         start: result.start,
         end: result.end,
         score: result.score
@@ -103,7 +121,103 @@ export class TransformersNERDetector implements NERDetector {
   }
 
   getLoadProgress(): number {
-    return this.loadProgress
+    // 确保返回值保留小数点后两位
+    return Math.round(this.loadProgress * 100) / 100
+  }
+
+  private mergeAdjacentEntities(results: any[], text: string): any[] {
+    if (results.length === 0) return []
+
+    const sorted = [...results].sort((a, b) => a.start - b.start)
+    const merged: any[] = [sorted[0]]
+
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = merged[merged.length - 1]
+      const curr = sorted[i]
+
+      // 当前实体完全包含在前一个实体内
+      if (curr.start >= prev.start && curr.end <= prev.end) {
+        continue
+      }
+
+      // 前一个实体完全包含在当前实体内
+      if (prev.start >= curr.start && prev.end <= curr.end) {
+        merged[merged.length - 1] = curr
+        continue
+      }
+
+      // 部分重叠或相邻：合并它们
+      if (curr.start <= prev.end + 1) {
+        prev.end = Math.max(prev.end, curr.end)
+        prev.word = text.substring(prev.start, prev.end)
+        prev.score = Math.max(prev.score, curr.score)
+        if (curr.score > prev.score) {
+          prev.entity_group = curr.entity_group
+        }
+      } else {
+        merged.push(curr)
+      }
+    }
+
+    return merged
+  }
+
+  private removeRedundantEntities(results: any[]): any[] {
+    if (results.length <= 1) return results
+
+    const sorted = [...results].sort((a, b) => a.start - b.start)
+    const keep: any[] = []
+
+    for (const curr of sorted) {
+      // 检查当前实体是否与已保留的实体重叠
+      let redundantResult: 'skip' | 'replace' | false = false
+
+      for (const existing of keep) {
+        // 完全包含关系
+        const currContained = curr.start >= existing.start && curr.end <= existing.end
+        const existingContained = existing.start >= curr.start && existing.end <= curr.end
+
+        if (currContained) {
+          redundantResult = 'skip'
+          break
+        }
+        if (existingContained) {
+          redundantResult = 'replace'
+          break
+        }
+
+        // 部分重叠：计算重叠比例
+        const overlapStart = Math.max(curr.start, existing.start)
+        const overlapEnd = Math.min(curr.end, existing.end)
+        const overlapLength = overlapEnd - overlapStart
+
+        if (overlapLength > 0) {
+          const currLength = curr.end - curr.start
+          const existingLength = existing.end - existing.start
+          const overlapRatio = overlapLength / Math.min(currLength, existingLength)
+
+          // 如果重叠超过50%，保留置信度高的
+          if (overlapRatio > 0.5) {
+            redundantResult = curr.score > existing.score ? 'replace' : 'skip'
+            break
+          }
+        }
+      }
+
+      if (redundantResult === 'replace') {
+        // 替换已有项
+        const idx = keep.findIndex(existing => {
+          const overlapStart = Math.max(curr.start, existing.start)
+          const overlapEnd = Math.min(curr.end, existing.end)
+          return overlapEnd - overlapStart > 0
+        })
+        if (idx >= 0) keep[idx] = curr
+      } else if (redundantResult !== 'skip') {
+        keep.push(curr)
+      }
+    }
+
+    return keep
   }
 }
 

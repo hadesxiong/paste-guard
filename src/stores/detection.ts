@@ -49,9 +49,9 @@ export const useDetectionStore = defineStore('detection', () => {
 
         const replacer = getReplacer()
         const { sanitizedText: result } = replacer.apply(
-        originalText.value,
-        detections.value,
-        replaceConfigs.value
+            originalText.value,
+            detections.value,
+            replaceConfigs.value
         )
 
         return result

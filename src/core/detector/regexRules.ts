@@ -90,17 +90,20 @@ export const regexRules: DetectionRule[] = [
     }
   },
   // 连接串密码（全数据库支持）
+  // 支持密码中包含特殊字符（包括 @、! 等），只将最后一个 @ 视为分隔符
+  // 也支持无用户名格式：redis://:password@host
   {
     type: 'DB_PASSWORD',
     pattern: new RegExp(
-      `(${DB_SCHEMES.join('|')}):\\/\\/([^:\\s]+):([^@\\s]+)@`,
+      `(${DB_SCHEMES.join('|')}):\\/\\/(?:([^:\\s]*):)?([^@\\s]{3,}(?:@[^@\\s]+)*)@`,
       'g'
     ),
     confidence: 'high',
     extractor: (match) => {
-      const password = match[3]
+      // match[2] 是密码（用户名可能为空）
+      const password = match[3] || match[2]
       const fullMatch = match[0]
-      const passwordIndex = fullMatch.indexOf(':' + password) + 1
+      const passwordIndex = fullMatch.lastIndexOf(':' + password) + 1
 
       console.log('[PasteGuard] Found DB_PASSWORD in connection string:', password.substring(0, 20) + (password.length > 20 ? '...' : ''))
 
@@ -112,9 +115,10 @@ export const regexRules: DetectionRule[] = [
     }
   },
   // 独立 user:password@host 格式（无 scheme 前缀）
+  // 允许密码中包含特殊字符（包括 @、! 等），只将最后一个 @ 视为分隔符
   {
     type: 'DB_PASSWORD',
-    pattern: /(?<![a-zA-Z0-9])([^:\s]{2,30}):([^@\s]{3,50})@(?=[a-zA-Z0-9])/g,
+    pattern: /(?<![a-zA-Z0-9])([^:\s]{2,30}):([^@\s]{3,50}(?:@[^@\s]+)*)@(?=[a-zA-Z0-9])/g,
     confidence: 'medium',
     extractor: (match) => {
       const user = match[1]
@@ -122,13 +126,17 @@ export const regexRules: DetectionRule[] = [
       const passwordIndex = user.length + 1
 
       // 排除明显的非连接串格式
-      // 密码太短或太长可能是误报
-      if (password.length < 3 || password.length > 50) {
+      if (password.length < 3 || password.length > 100) {
         return null
       }
 
-      // 用户名看起来像时间戳或数字（可能是误报）
       if (/^\d+$/.test(user)) {
+        return null
+      }
+
+      // 进一步验证：host 部分看起来像主机名/IP
+      const afterAt = match[0].substring(match[0].lastIndexOf('@') + 1)
+      if (!/^[a-zA-Z0-9.-]+/.test(afterAt)) {
         return null
       }
 
@@ -141,10 +149,45 @@ export const regexRules: DetectionRule[] = [
       }
     }
   },
-  // OpenAI API Key
+  // 命令行密码参数（如 redis-server --requirepass RedisP@ss2024）
+  {
+    type: 'ENV_PASSWORD',
+    pattern: /(?:--(?:require)?pass(?:word)?|-(?:p|password))\s+([^\s]{3,})/gi,
+    confidence: 'high',
+    extractor: (match) => {
+      const password = match[1]
+      const fullMatch = match[0]
+      const passwordIndex = fullMatch.indexOf(password)
+
+      // 过滤明显的非密码值
+      if (password.length < 3 || password.length > 100) {
+        return null
+      }
+
+      // 排除看起来像路径、URL或标志的值
+      if (/^https?:\/\//.test(password) || password.startsWith('/') || password.startsWith('-')) {
+        return null
+      }
+
+      console.log('[PasteGuard] Found CLI password:', password.substring(0, 20) + (password.length > 20 ? '...' : ''))
+
+      return {
+        original: password,
+        startIndex: match.index! + passwordIndex,
+        endIndex: match.index! + passwordIndex + password.length
+      }
+    }
+  },
+  // OpenAI API Key (支持 sk- 和 sk-proj- 格式)
   {
     type: 'API_KEY',
-    pattern: /sk-[A-Za-z0-9]{20,}/g,
+    pattern: /sk-(?:proj-)?[A-Za-z0-9]{20,}/g,
+    confidence: 'high'
+  },
+  // JWT Secret / 通用 Secret Key（如 jwt-secret-key-xxx, secret-key-xxx 等）
+  {
+    type: 'API_KEY',
+    pattern: /\b(?:jwt[_-]?secret|secret[_-]?key)[_-]?[A-Za-z0-9\-_]{16,}/gi,
     confidence: 'high'
   },
   // GitHub Token

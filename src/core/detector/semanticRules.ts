@@ -104,15 +104,54 @@ export const semanticFilter = (items: DetectionItem[]): DetectionItem[] => {
   })
 }
 
-// 移除重复检测项（基于位置）
-export const removeDuplicates = (items: DetectionItem[]): DetectionItem[] => {
-  const seen = new Set<string>()
-  return items.filter(item => {
-    const key = `${item.startIndex}-${item.endIndex}`
-    if (seen.has(key)) {
-      return false
+// 移除重复检测项（基于位置，支持容差）
+export const removeDuplicates = (items: DetectionItem[], tolerance: number = 3): DetectionItem[] => {
+  const sorted = [...items].sort((a, b) => a.startIndex - b.startIndex)
+  const result: DetectionItem[] = []
+
+  for (const item of sorted) {
+    let duplicateResult: 'replace' | false = false
+
+    for (const existing of result) {
+      // 检查位置是否重叠或接近（容差范围内）
+      const overlap = !(item.endIndex < existing.startIndex - tolerance || item.startIndex > existing.endIndex + tolerance)
+      if (!overlap) continue
+
+      // 如果重叠，保留置信度高的，或范围更大的
+      const itemConfidence = confidenceOrder[item.confidence] || 0
+      const existingConfidence = confidenceOrder[existing.confidence] || 0
+
+      if (itemConfidence > existingConfidence) {
+        duplicateResult = 'replace'
+        break
+      } else if (itemConfidence === existingConfidence) {
+        // 置信度相同，保留范围更大的
+        const itemRange = item.endIndex - item.startIndex
+        const existingRange = existing.endIndex - existing.startIndex
+        if (itemRange > existingRange) {
+          duplicateResult = 'replace'
+          break
+        }
+      }
     }
-    seen.add(key)
-    return true
-  })
+
+    if (duplicateResult === 'replace') {
+      // 替换已有项
+      const idx = result.findIndex(existing => {
+        const overlap = !(item.endIndex < existing.startIndex - tolerance || item.startIndex > existing.endIndex + tolerance)
+        return overlap
+      })
+      if (idx >= 0) result[idx] = item
+    } else {
+      result.push(item)
+    }
+  }
+
+  return result
+}
+
+const confidenceOrder: Record<string, number> = {
+  'high': 3,
+  'medium': 2,
+  'low': 1
 }

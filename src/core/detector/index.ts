@@ -1,7 +1,7 @@
 import type { DetectionItem, DetectionResult } from '../types'
 import { scanRegexRules } from './regexRules'
 import { semanticFilter, removeDuplicates } from './semanticRules'
-import { getNERDetector } from './nerDetector'
+import { getNERDetector, nerResultToDetectionItem } from './nerDetector'
 
 // 检测引擎配置
 interface DetectorConfig {
@@ -44,14 +44,33 @@ export const detect = async (
         console.log('[PasteGuard] NER detector is ready, running detection...')
         const nerResults = await nerDetector.detect(text)
         console.log('[PasteGuard] NER found', nerResults.length, 'entities')
+        
+        // 构建正则检测的排除区间（用于NER去重）
+        const regexIntervals = items.map(item => ({
+          start: item.startIndex,
+          end: item.endIndex
+        }))
+
         for (const nerResult of nerResults) {
           const nerItem = nerResultToDetectionItem(nerResult, text, 0)
           if (nerItem) {
-            // 检查是否已被其他规则捕获
-            const alreadyDetected = items.some(
-              item => item.startIndex <= nerItem.startIndex && item.endIndex >= nerItem.endIndex
-            )
-            if (!alreadyDetected) {
+            // 检查是否与正则结果有重叠（使用容差）
+            const overlapsWithRegex = regexIntervals.some(interval => {
+              const overlapStart = Math.max(nerItem.startIndex, interval.start)
+              const overlapEnd = Math.min(nerItem.endIndex, interval.end)
+              return overlapEnd - overlapStart > 0
+            })
+            
+            // 也检查是否与已添加的NER结果重叠
+            const overlapsWithNER = items.some(
+              item => item.detectionTypes?.includes('ENV_PASSWORD') || item.detectionTypes?.includes('API_KEY') || item.detectionTypes?.includes('HIGH_ENTROPY')
+            ) && items.some(item => {
+              const overlapStart = Math.max(nerItem.startIndex, item.startIndex)
+              const overlapEnd = Math.min(nerItem.endIndex, item.endIndex)
+              return overlapEnd - overlapStart > 0
+            })
+
+            if (!overlapsWithRegex && !overlapsWithNER) {
               items.push(nerItem)
               console.log('[PasteGuard] NER entity:', nerResult.entity_group, nerResult.word)
             }
@@ -79,7 +98,7 @@ export const detect = async (
   console.log('[PasteGuard] Step 4: Removing position duplicates...')
   if (mergedConfig.removeDuplicates) {
     const beforeDedup = items.length
-    items = removeDuplicates(items)
+    items = removeDuplicates(items, 3) // 3字符容差
     console.log('[PasteGuard] Position dedup: before', beforeDedup, '-> after', items.length)
   }
 
@@ -107,14 +126,22 @@ export const detect = async (
   }
 }
 
-// 合并相同值的检测项
+// 合并相同值的检测项（支持相似值合并）
 const mergeDuplicateValues = (items: DetectionItem[]): DetectionItem[] => {
-  const merged = new Map<string, DetectionItem>()
+  const merged: DetectionItem[] = []
 
   for (const item of items) {
-    const existing = merged.get(item.original)
+    // 查找是否有相似的已合并项
+    let matchedIndex = -1
+    for (let i = 0; i < merged.length; i++) {
+      if (isSimilarValue(item.original, merged[i].original)) {
+        matchedIndex = i
+        break
+      }
+    }
 
-    if (existing) {
+    if (matchedIndex >= 0) {
+      const existing = merged[matchedIndex]
       // 合并类型
       const existingTypes = existing.detectionTypes || [existing.type]
       const newTypes = item.detectionTypes || [item.type]
@@ -128,18 +155,61 @@ const mergeDuplicateValues = (items: DetectionItem[]): DetectionItem[] => {
         existing.confidence = item.confidence
       }
 
+      // 更新原始值（保留较长的，通常更完整）
+      if (item.original.length > existing.original.length) {
+        existing.original = item.original
+      }
+
       // 更新上下文（保留更长的）
       if (item.context && item.context.length > (existing.context?.length || 0)) {
         existing.context = item.context
       }
 
-      console.log('[PasteGuard] Merged value:', item.original.substring(0, 20) + '...', 'types:', existing.detectionTypes)
+      console.log('[PasteGuard] Merged similar value:', item.original.substring(0, 20) + '...', 'types:', existing.detectionTypes)
     } else {
-      merged.set(item.original, { ...item })
+      merged.push({ ...item })
     }
   }
 
-  return Array.from(merged.values())
+  return merged
+}
+
+// 判断两个值是否相似（用于去重）
+const isSimilarValue = (a: string, b: string): boolean => {
+  if (a === b) return true
+
+  // 如果一个是另一个的子串（且长度差不大），视为相似
+  const longer = a.length > b.length ? a : b
+  const shorter = a.length > b.length ? b : a
+
+  if (longer.includes(shorter)) {
+    const ratio = shorter.length / longer.length
+    return ratio > 0.7 // 短串占长串70%以上
+  }
+
+  // 计算编辑距离相似度（简化版：公共子串比例）
+  const similarity = calculateSimilarity(a, b)
+  return similarity > 0.85
+}
+
+// 简化的相似度计算：最长公共子串长度 / 最大长度
+const calculateSimilarity = (a: string, b: string): number => {
+  const maxLen = Math.max(a.length, b.length)
+  if (maxLen === 0) return 1
+
+  // 找最长公共子串
+  let maxCommon = 0
+  for (let i = 0; i < a.length; i++) {
+    for (let j = 0; j < b.length; j++) {
+      let k = 0
+      while (i + k < a.length && j + k < b.length && a[i + k] === b[j + k]) {
+        k++
+      }
+      maxCommon = Math.max(maxCommon, k)
+    }
+  }
+
+  return maxCommon / maxLen
 }
 
 // 重新生成占位符（确保同一类型使用连续索引）
@@ -165,6 +235,3 @@ export const preloadNER = async (): Promise<void> => {
     throw error
   }
 }
-
-// 导入nerResultToDetectionItem（供NER检测使用）
-import { nerResultToDetectionItem } from './nerDetector'
