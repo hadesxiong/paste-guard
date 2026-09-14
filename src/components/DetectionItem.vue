@@ -48,15 +48,10 @@ const detectionTypesDisplay = computed(() => {
     const types = props.item.detectionTypes || [props.item.type]
     return types.map(t => typeNames[t]).join(' + ')
 })
-
-const truncate = (str: string, maxLength: number = 30): string => {
-    if (str.length <= maxLength) return str
-    return str.substring(0, maxLength) + '...'
-}
 </script>
 
 <template>
-    <Card hover class="transition-all duration-200">
+    <Card hover class="transition-all duration-200 min-w-[320px]">
         <div class="flex flex-col gap-3">
             <!-- 头部: 标题 + 功能 -->
             <div class="flex items-center justify-between gap-4">
@@ -73,14 +68,14 @@ const truncate = (str: string, maxLength: number = 30): string => {
                     <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
                         {{ isReplace ? '替换' : '保留' }}
                     </span>
-                    <Switch v-model="isReplace" />
+                    <Switch v-model="isReplace" type="square" />
                 </div>
             </div>
             <!-- 原文 -->
             <div class="flex flex-col gap-1.5">
                 <span class="text-xs text-gray-600 dark:text-gray-700">原文:</span>
-                <p class="text-sm font-mono text-gray-900 dark:text-gray-100 break-all bg-gray-50 dark:bg-gray-900 rounded px-2 py-1">
-                    {{ truncate(item.original) }}
+                <p class="text-sm font-mono text-gray-900 dark:text-gray-100 truncate bg-gray-50 dark:bg-gray-900 rounded px-2 py-1">
+                    {{ item.original }}
                 </p>
             </div>
             <!-- 替换 -->
@@ -92,7 +87,7 @@ const truncate = (str: string, maxLength: number = 30): string => {
             </div>
             <!-- 匹配到的内容 -->
             <div v-if="item.context" class="text-xs text-gray-600 dark:text-gray-500 truncate">
-                {{ truncate(item.context, 50) }}
+                {{ item.context }}
             </div>   
         </div>
     </Card>

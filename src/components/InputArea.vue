@@ -61,7 +61,7 @@ const handlePaste = (_event: ClipboardEvent) => {
 </script>
 
 <template>
-    <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-3 h-full">
         <div class="flex items-center w-full justify-between">
             <label class="text-base font-bold text-gray-700 dark:text-gray-300">
                 输入文本</label>
@@ -80,12 +80,12 @@ const handlePaste = (_event: ClipboardEvent) => {
             </div>
         </div>
 
-        <div class="p-0">
+        <div class="p-0 min-[720px]:flex-1 min-[720px]:flex min-[720px]:flex-col">
             <textarea ref="textareaRef"
                 v-model="localText"
                 @paste="handlePaste"
                 placeholder="粘贴或输入包含敏感信息的文本..."
-                class="w-full min-h-40 h-auto px-3 py-2 text-sm font-mono rounded-sm resize-none 
+                class="w-full min-h-40 h-full px-3 py-2 text-sm font-mono rounded-sm resize-none 
                 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-900 
                 border border-gray-200 dark:border-gray-700 
                 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent placeholder-gray-400 dark:placeholder-gray-500 transition-all duration-200"

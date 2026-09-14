@@ -86,7 +86,9 @@ watch(() => props.detections, () => {
                     </AccordionTrigger>
                 </AccordionHeader>
                 <AccordionContent class="p-0">
-                    <div class="flex flex-col gap-3">
+                    <div class="grid grid-cols-1 gap-3 
+                        min-[1080px]:grid-cols-2 
+                        min-[1200px]:grid-cols-3">
                         <DetectionItemComponent v-for="item in items" :key="item.id" :item="item" />
                     </div>
                 </AccordionContent>

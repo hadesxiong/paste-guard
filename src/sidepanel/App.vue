@@ -39,6 +39,10 @@ const toggleEngineStatus = () => {
     showEngineStatus.value = !showEngineStatus.value
 }
 
+const openInNewTab = () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('src/sidepanel/index.html') })
+}
+
 const engineStatusItems = computed(() => [
     {
         name: '正则规则',
@@ -75,46 +79,44 @@ const engineStatusItems = computed(() => [
         <header class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
             <div class="p-3">
                 <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                    <div class="w-8 h-8 rounded-sm bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-sm bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+                        </div>
+                        <div class="flex items-baseline gap-2">
+                            <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
+                                PasteGuard</h1>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                AI脱敏助手</p>
+                        </div>
                     </div>
-                    <div class="flex items-baseline gap-2">
-                        <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
-                            PasteGuard</h1>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">
-                            AI脱敏助手</p>
+                    <div class="flex items-center gap-2">
+                        <!-- 独立打开按钮 -->
+                        <Button @click="openInNewTab" variant="secondary"
+                            btn-type="text" size="sm">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                        </Button>
+                        <!-- 引擎状态按钮 -->
+                        <Button @click="toggleEngineStatus" variant="secondary"
+                            btn-type="text" size="sm"
+                            :class="{ 'text-green-600 dark:text-green-400': store.isNERReady }">
+                            <svg class="w-5 h-5" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </Button>
                     </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <Button
-                    @click="toggleEngineStatus"
-                    variant="secondary"
-                    btnType="text"
-                    size="sm"
-                    :class="{ 'text-green-600 dark:text-green-400': store.isNERReady }"
-                    >
-                    <svg
-                        class="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                    </svg>
-                    </Button>
-                </div>
                 </div>
             </div>
         </header>
         <!-- 引擎状态面板 -->
         <div v-if="showEngineStatus"
-            class="mx-3 mt-3 p-3 right-0 rounded-sm shadow-sm border absolute z-10
-                bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+            class="p-3 rounded-sm shadow-sm border fixed z-20
+                bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                :style="{ top: 'var(--header-height)', right: '12px' }">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
                     检测引擎状态</h3>
@@ -130,7 +132,7 @@ const engineStatusItems = computed(() => [
                 </svg>
                 </button>
             </div>
-
+            <!-- 引擎具体内容 -->
             <div class="flex flex-col gap-3">
                 <div v-for="item in engineStatusItems" :key="item.name"
                     class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-900">
@@ -159,7 +161,6 @@ const engineStatusItems = computed(() => [
                         {{ item.enabled ? '生效' : '未生效' }}</span>
                 </div>
             </div>
-
             <!-- NER 模型操作 -->
             <div
                 v-if="store.nerStatus === 'error' || store.nerStatus === 'timeout'"
@@ -218,90 +219,93 @@ const engineStatusItems = computed(() => [
             </p>
         </div>
         </div>
-
-        <div
-        v-else-if="store.nerStatus === 'error' || store.nerStatus === 'timeout'"
-        class="mx-4 mt-4 flex items-center gap-3 px-4 py-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800"
-        >
-        <svg
-            class="w-5 h-5 text-yellow-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-        </svg>
-        <div class="flex-1">
-            <p class="text-sm font-medium text-yellow-700 dark:text-yellow-300">
-            {{ store.nerStatus === 'timeout' ? 'NER模型加载超时' : 'NER模型加载失败' }}
-            </p>
-            <p class="text-xs text-yellow-500 dark:text-yellow-400">
-            {{ store.nerError || '基础检测功能仍可正常使用' }}
-            </p>
+        <!-- NER 模型下载提示 - 失败 -->
+        <div v-else-if="store.nerStatus === 'error' || store.nerStatus === 'timeout'"
+            class="mx-4 mt-4 flex items-center gap-3 px-4 py-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-800">
+            <svg class="w-5 h-5 text-yellow-500" fill="none"
+                stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <div class="flex-1">
+                <p class="text-sm font-medium text-yellow-700 dark:text-yellow-300">
+                    {{ store.nerStatus === 'timeout' ? 'NER模型加载超时' : 'NER模型加载失败' }}</p>
+                <p class="text-xs text-yellow-500 dark:text-yellow-400">
+                    {{ store.nerError || '基础检测功能仍可正常使用' }}</p>
+            </div>
+            <Button @click="store.retryLoadNER"
+                variant="secondary" btnType="outline" size="sm">
+                重试</Button>
         </div>
-        <Button
-            @click="store.retryLoadNER"
-            variant="secondary"
-            btnType="outline"
-            size="sm"
-        >
-            重试
-        </Button>
+        <!-- NER 模型下载提示 - 成功 -->
+        <div v-else-if="store.nerStatus === 'success'"
+            class="mx-4 mt-4 flex items-center gap-3 px-4 py-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+            <svg class="w-5 h-5 text-green-500" fill="none"
+                stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                    stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div class="flex-1">
+                <p class="text-sm font-medium text-green-700 dark:text-green-300">
+                    NER模型已就绪</p>
+                <p class="text-xs text-green-500 dark:text-green-400">
+                    增强检测已启用</p>
+            </div>
         </div>
-
-        <div
-        v-else-if="store.nerStatus === 'success'"
-        class="mx-4 mt-4 flex items-center gap-3 px-4 py-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800"
-        >
-        <svg
-            class="w-5 h-5 text-green-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-        </svg>
-        <div class="flex-1">
-            <p class="text-sm font-medium text-green-700 dark:text-green-300">
-            NER模型已就绪
-            </p>
-            <p class="text-xs text-green-500 dark:text-green-400">
-            增强检测已启用
-            </p>
-        </div>
-        </div>
-
         <!-- 主内容 -->
-        <main class="p-3 flex flex-col gap-3 max-w-2xl mx-auto relative">
-            <InputArea
-                v-model="inputText"
-                :is-processing="showOverlay"
-                @detect="handleDetect"
-                @clear="handleClear"
-            />
-
-            <DetectionList v-if="hasResults"
-                :detections="store.detections" class="mb-14"
-            />
-            <LoadingOverlay v-if="showOverlay" />
+        <main :class="[
+            'flex flex-col relative',
+            hasResults && `min-h-[calc(100vh-58px)] min-[820px]:flex-row min-[820px]:h-[calc(100vh-64px)]`
+            ]">
+            <!-- 左侧列 -->
+            <div :class="[
+                'flex flex-col min-w-100',
+                hasResults && `
+                    min-[820px]:w-auto 
+                    min-[820px]:min-w-100
+                    min-[820px]:max-w-125 
+                    min-[820px]:h-auto 
+                    min-[820px]:overflow-y-auto 
+                    min-[820px]:border-r 
+                    min-[820px]:min-h-[calc(100vh-64px)]
+                    min-[820px]:border-gray-300 
+                    dark:min-[820px]:border-gray-700 `
+                ]">
+                <!-- 输入项 -->
+                <div :class="['px-3 pt-3',
+                    hasResults && `
+                        min-[820px]:py-3
+                        min-[820px]:flex 
+                        min-[820px]:flex-col 
+                        min-[820px]:flex-1 
+                        min-[820px]:min-h-0`
+                ]">
+                    <InputArea v-model="inputText" :is-processing="showOverlay"
+                        @detect="handleDetect" @clear="handleClear"/>
+                </div>
+                <!-- 底部操作 -->
+                <div v-if="hasResults" class="hidden min-[820px]:block">
+                    <ActionBar @copy="handleCopy" @replace-all="store.replaceAll" 
+                        @keep-all="store.keepAll"/>
+                </div>
+            </div>
+            <!-- 右侧列 -->
+            <div v-if="hasResults" class="flex-1 min-[820px]:flex-1 
+                min-[820px]:h-full min-[820px]:overflow-y-auto">
+                <!-- 检查结果 -->
+                <div class="p-3">
+                    <DetectionList v-if="hasResults"
+                        :detections="store.detections"/>
+                </div>
+                <!-- 遮罩 -->
+                <LoadingOverlay v-if="showOverlay" />
+            </div>
+            <!-- 输入项: 小于820px下显示 -->
+            <div v-if="hasResults" class="min-[820px]:hidden sticky bottom-0">
+                <ActionBar @copy="handleCopy" @replace-all="store.replaceAll" 
+                    @keep-all="store.keepAll"/>
+            </div>
         </main>
     </div>
-    <div class="fixed bottom-0 h-auto w-full">
-        <ActionBar
-            v-if="hasResults"
-            @copy="handleCopy"
-            @replace-all="store.replaceAll"
-            @keep-all="store.keepAll"
-        />
-    </div>
+
 </template>
