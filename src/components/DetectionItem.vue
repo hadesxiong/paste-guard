@@ -41,7 +41,9 @@ const typeNames: Record<DetectionType, string> = {
     DB_PASSWORD: '数据库密码',
     JWT: 'JWT',
     PRIVATE_KEY: '私钥',
-    HIGH_ENTROPY: '高熵字符串'
+    HIGH_ENTROPY: '高熵字符串',
+    EMAIL: '邮箱',
+    PHONE: '电话'
 }
 
 const detectionTypesDisplay = computed(() => {

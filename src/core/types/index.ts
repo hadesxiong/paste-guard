@@ -6,9 +6,14 @@ export type DetectionType =
   | 'JWT'
   | 'PRIVATE_KEY'
   | 'HIGH_ENTROPY'
+  | 'EMAIL'
+  | 'PHONE'
 
 // 置信度类型
 export type Confidence = 'high' | 'medium' | 'low'
+
+// 检测来源
+export type DetectionSource = 'model' | 'regex'
 
 // 检测项
 export interface DetectionItem {
@@ -21,6 +26,7 @@ export interface DetectionItem {
   confidence: Confidence
   context: string
   detectionTypes?: DetectionType[]  // 命中的所有检测类型
+  source?: DetectionSource  // 检测来源
 }
 
 // 检测结果

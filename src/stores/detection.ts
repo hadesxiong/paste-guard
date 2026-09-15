@@ -1,19 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { DetectionItem, ReplaceConfig, MappingTable } from '../core/types'
-import { detect, preloadNER } from '../core/detector'
+import { detect, preloadModels } from '../core/detector'
 import { getReplacer } from '../core/replacer'
-import { getNERDetector } from '@/core/detector/nerDetector'
 
-// NER 模型状态类型
-type NERStatus = 'idle' | 'loading' | 'success' | 'error' | 'timeout' | 'disabled'
+// 模型状态类型
+type ModelStatus = 'idle' | 'loading' | 'success' | 'error' | 'timeout' | 'disabled'
 
 // 检测引擎状态
 interface DetectionEngineStatus {
-    regexRules: boolean      // 正则规则是否生效
-    semanticRules: boolean   // 语义规则是否生效
-    nerModel: boolean        // NER模型是否生效
-    connectionStringParser: boolean  // 连接串解析是否生效
+    sceneModel: boolean        // 场景识别模型
+    contentModel: boolean      // 内容检测模型
+    regexRules: boolean        // 正则规则
 }
 
 export const useDetectionStore = defineStore('detection', () => {
@@ -24,8 +22,8 @@ export const useDetectionStore = defineStore('detection', () => {
     const mappingTable = ref<MappingTable>({})
     const isProcessing = ref(false)
 
-    // NER 模型状态
-    const nerStatus = ref<NERStatus>('disabled') // [NER-disabled] 与 enableNER 配置同步
+    // 模型状态（向后兼容旧变量名）
+    const nerStatus = ref<ModelStatus>('disabled')
     const nerLoadProgress = ref(0)
     const nerError = ref<string | null>(null)
     const nerRetryCount = ref(0)
@@ -33,10 +31,9 @@ export const useDetectionStore = defineStore('detection', () => {
 
     // 检测引擎状态
     const engineStatus = ref<DetectionEngineStatus>({
-        regexRules: true,
-        semanticRules: true,
-        nerModel: false,
-        connectionStringParser: true
+        sceneModel: false,
+        contentModel: false,
+        regexRules: true
     })
 
     // 计算属性
@@ -145,82 +142,82 @@ export const useDetectionStore = defineStore('detection', () => {
         }
     }
 
-    // 后台预加载NER模型
+    // 后台预加载模型
     const initNER = async () => {
-        console.log('[PasteGuard] Initializing NER model...')
+        console.log('[PasteGuard] Initializing models...')
         nerStatus.value = 'loading'
         nerLoadProgress.value = 0
         nerError.value = null
 
-        if (progressInterval) { clearInterval(progressInterval)}
+        if (progressInterval) { clearInterval(progressInterval) }
 
         try {
-            // 在后台加载，不阻塞UI
-            const timeout = 15000 // 15秒超时
+            const timeout = 30000 // 30秒超时
 
             const timeoutPromise = new Promise<void>((resolve) => {
                 setTimeout(() => {
-                    console.warn('[PasteGuard] NER model load timeout')
+                    console.warn('[PasteGuard] Model load timeout')
                     resolve()
                 }, timeout)
-        })
+            })
 
-        progressInterval = setInterval(() => {
-            const detector = getNERDetector()
-            nerLoadProgress.value = detector.getLoadProgress()
-        }, 300)
+            progressInterval = setInterval(() => {
+                // 模拟进度
+                if (nerLoadProgress.value < 90) {
+                    nerLoadProgress.value += 5
+                }
+            }, 500)
 
-        const loadPromise = preloadNER().then(() => {
-            nerStatus.value = 'success'
-            nerRetryCount.value = 0
-            nerLoadProgress.value = 100
-            engineStatus.value.nerModel = true
-            console.log('[PasteGuard] NER model loaded successfully')
-        }).catch(error => {
-            console.error('[PasteGuard] NER preload failed:', error)
-            // nerStatus.value = 'error'
-            // nerError.value = error instanceof Error ? error.message : '网络请求被阻止或模型下载失败'
-            if (nerRetryCount.value >= 3) {
-                nerStatus.value = 'error'
-                nerError.value = error instanceof Error ? error.message : '网络请求被阻止或模型下载失败'
+            const loadPromise = preloadModels().then(() => {
+                nerStatus.value = 'success'
+                nerRetryCount.value = 0
+                nerLoadProgress.value = 100
+                engineStatus.value.sceneModel = true
+                engineStatus.value.contentModel = true
+                console.log('[PasteGuard] Models loaded successfully')
+            }).catch(error => {
+                console.error('[PasteGuard] Model preload failed:', error)
+                if (nerRetryCount.value >= 3) {
+                    nerStatus.value = 'error'
+                    nerError.value = error instanceof Error ? error.message : '网络请求被阻止或模型下载失败'
+                }
+                engineStatus.value.sceneModel = false
+                engineStatus.value.contentModel = false
+            }).finally(() => {
+                if (progressInterval) { clearInterval(progressInterval) }
+            })
+
+            await Promise.race([loadPromise, timeoutPromise])
+
+            if (nerStatus.value === 'loading') {
+                if (nerRetryCount.value >= 3) {
+                    nerStatus.value = 'timeout'
+                    nerError.value = '模型下载超时，请检查网络连接'
+                }
+                engineStatus.value.sceneModel = false
+                engineStatus.value.contentModel = false
             }
-            engineStatus.value.nerModel = false
-        }).finally(() => {
-            if (progressInterval) { clearInterval(progressInterval) }
-        })
-
-        // 等待加载完成或超时
-        await Promise.race([loadPromise, timeoutPromise])
-
-        // 如果超时但还在加载，标记为超时
-        if (nerStatus.value === 'loading') {
-            if (nerRetryCount.value >= 3) {
-                nerStatus.value = 'timeout'
-                nerError.value = '模型下载超时，请检查网络连接'
-            }
-            // nerStatus.value = 'timeout'
-            // nerError.value = '模型下载超时，请检查网络连接'
-            engineStatus.value.nerModel = false
-        }
         } catch (error) {
-            console.error('[PasteGuard] NER initialization failed:', error)
+            console.error('[PasteGuard] Model initialization failed:', error)
             nerStatus.value = 'error'
             nerError.value = error instanceof Error ? error.message : '未知错误'
-            engineStatus.value.nerModel = false
+            engineStatus.value.sceneModel = false
+            engineStatus.value.contentModel = false
         }
     }
 
-    // 重新加载NER模型
+    // 重新加载模型
     const retryLoadNER = async () => {
-        console.log('[PasteGuard] Retrying NER model load...')
+        console.log('[PasteGuard] Retrying model load...')
         await initNER()
     }
 
-    // 禁用NER模型（降级模式）
+    // 禁用模型（降级模式）
     const disableNER = () => {
         nerStatus.value = 'disabled'
-        engineStatus.value.nerModel = false
-        console.log('[PasteGuard] NER model disabled')
+        engineStatus.value.sceneModel = false
+        engineStatus.value.contentModel = false
+        console.log('[PasteGuard] Models disabled')
     }
 
     return {
@@ -231,7 +228,7 @@ export const useDetectionStore = defineStore('detection', () => {
         mappingTable,
         isProcessing,
 
-        // NER 状态
+        // 模型状态
         nerStatus,
         nerLoadProgress,
         nerError,

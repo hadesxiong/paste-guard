@@ -13,9 +13,9 @@ const hasResults = computed(() => store.detections.length > 0)
 const showEngineStatus = ref(false)
 
 // [NER-disabled] 网络环境较差时禁用，启用时取消注释
-// onMounted(() => {
-//     store.initNER()
-// })
+onMounted(() => {
+    store.initNER()
+})
 
 // WebDevtools 状态测试
 ;(window as any).__store = store
@@ -83,22 +83,16 @@ const engineStatusItems = computed(() => [
         icon: 'regex'
     },
     {
-        name: '语义规则',
-        description: '敏感变量名关键词、非敏感白名单',
-        enabled: store.engineStatus.semanticRules,
-        icon: 'semantic'
+        name: '场景识别',
+        description: '自动识别文本类型（YAML/ENV/Code/Log）',
+        enabled: store.engineStatus.sceneModel,
+        icon: 'scene'
     },
     {
-        name: '连接串解析',
-        description: 'postgres、mysql、mongodb、redis、amqp',
-        enabled: store.engineStatus.connectionStringParser,
-        icon: 'connection'
-    },
-    {
-        name: 'NER模型',
-        description: '增强检测自然语言中的敏感实体',
-        enabled: store.engineStatus.nerModel,
-        icon: 'ner'
+        name: '内容检测',
+        description: 'AI模型识别密钥、密码、Token等敏感信息',
+        enabled: store.engineStatus.contentModel,
+        icon: 'content'
     }
 ])
 </script>
@@ -337,8 +331,6 @@ const engineStatusItems = computed(() => [
                     <DetectionList v-if="hasResults"
                         :detections="store.detections"/>
                 </div>
-                <!-- 遮罩 -->
-                <LoadingOverlay v-if="showOverlay" />
             </div>
             <!-- 输入项: 小于820px下显示 -->
             <div v-if="hasResults" class="min-[820px]:hidden sticky bottom-0">
@@ -346,6 +338,8 @@ const engineStatusItems = computed(() => [
                     @keep-all="store.keepAll"/>
             </div>
         </main>
+        <!-- 全局检测中遮罩 -->
+        <LoadingOverlay v-if="showOverlay" />
     </div>
 </template>
 

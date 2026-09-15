@@ -7,7 +7,9 @@ const PLACEHOLDER_FORMAT: Record<DetectionType, string> = {
   'DB_PASSWORD': 'DB_PASSWORD',
   'JWT': 'JWT',
   'PRIVATE_KEY': 'PRIVATE_KEY',
-  'HIGH_ENTROPY': 'SECRET'
+  'HIGH_ENTROPY': 'SECRET',
+  'EMAIL': 'EMAIL',
+  'PHONE': 'PHONE'
 }
 
 // 生成占位符
@@ -70,7 +72,9 @@ export const getPlaceholderDisplayText = (placeholder: string): string => {
     'DB_PASSWORD': '数据库密码',
     'JWT': 'JWT Token',
     'PRIVATE_KEY': '私钥',
-    'HIGH_ENTROPY': '高熵字符串'
+    'HIGH_ENTROPY': '高熵字符串',
+    'EMAIL': '邮箱',
+    'PHONE': '电话'
   }
 
   return `${typeNames[parsed.type]} #${parsed.index}`

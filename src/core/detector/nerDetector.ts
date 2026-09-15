@@ -42,8 +42,7 @@ export class TransformersNERDetector implements NERDetector {
       ort.env.wasm.proxy = false
 
       // 设置国内镜像地址
-    //   env.remoteHost = 'https://hf-mirror.com'
-      env.remoteHost = 'https://huggingface.co'
+      env.remoteHost = 'https://hf-mirror.com'
       env.remotePathTemplate = '{model}/resolve/main/'
 
       // 禁用多线程，避免 Chrome 扩展 CSP 阻止 blob URL worker

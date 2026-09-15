@@ -241,8 +241,8 @@ data:
 
 ```bash
 # 1. 空值
-EMPTY_PASSWORD=
-EMPTY_KEY=
+EMPTY_PASSWORD= 
+EMPTY_KEY= 
 
 # 2. 特殊字符
 SPECIAL_CHARS="p@ss!w0rd#$%^&*()"
